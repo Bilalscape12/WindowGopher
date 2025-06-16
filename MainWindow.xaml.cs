@@ -11,46 +11,50 @@ namespace WindowGopher
 {
     public partial class MainWindow : Window
     {
-        [DllImport("user32.dll")]
-        private static extern bool SetForegroundWindow(IntPtr hWnd);
+        [LibraryImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static partial bool SetForegroundWindow(IntPtr hWnd);
 
-        [DllImport("user32.dll")]
-        private static extern IntPtr GetForegroundWindow();
+        [LibraryImport("user32.dll")]
+        private static partial IntPtr GetForegroundWindow();
 
-        [DllImport("user32.dll")]
-        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+        [LibraryImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static partial bool ShowWindow(IntPtr hWnd, int nCmdShow);
 
-        [DllImport("user32.dll")]
-        private static extern bool IsIconic(IntPtr hWnd);
+        [LibraryImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static partial bool IsIconic(IntPtr hWnd);
 
-        [DllImport("user32.dll")]
-        private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+        [LibraryImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static partial bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
 
-        [DllImport("user32.dll")]
-        private static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool fAttach);
+        [LibraryImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static partial bool AttachThreadInput(uint idAttach, uint idAttachTo, [MarshalAs(UnmanagedType.Bool)] bool fAttach);
 
-        [DllImport("user32.dll")]
-        private static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
+        [LibraryImport("user32.dll")]
+        private static partial uint GetWindowThreadProcessId(IntPtr hWnd, out uint lpdwProcessId);
 
-        [DllImport("kernel32.dll")]
-        private static extern uint GetCurrentThreadId();
+        [LibraryImport("kernel32.dll")]
+        private static partial uint GetCurrentThreadId();
 
         private const int SW_RESTORE = 9;
         private const int SW_SHOW = 5;
         private const uint SWP_NOSIZE = 0x0001;
         private const uint SWP_NOMOVE = 0x0002;
         private const uint SWP_SHOWWINDOW = 0x0040;
-        private static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
-        private static readonly IntPtr HWND_NOTOPMOST = new IntPtr(-2);
+        private static readonly IntPtr HWND_TOPMOST = new(-1);
+        private static readonly IntPtr HWND_NOTOPMOST = new(-2);
 
         private IntPtr currentWindowHandle = IntPtr.Zero;
         private IntPtr targetWindowHandle = IntPtr.Zero;
-        private DispatcherTimer switchTimer;
-        private DispatcherTimer windowScanTimer;
-        private int mainInterval = 20; // seconds
-        private int backInterval = 2; // seconds
-        private bool isRunning = false;
-        private Dictionary<string, IntPtr> windowHandles = new Dictionary<string, IntPtr>();
+        private DispatcherTimer? switchTimer;
+        private readonly DispatcherTimer windowScanTimer;
+        private int mainInterval = 23; // seconds
+        private int backInterval = 3; // seconds
+        private Dictionary<string, (IntPtr Handle, int ProcessId)> windowHandles = [];
 
         public MainWindow()
         {
@@ -59,8 +63,10 @@ namespace WindowGopher
             txtBackInterval.Text = backInterval.ToString();
 
             // Initialize window scan timer
-            windowScanTimer = new DispatcherTimer();
-            windowScanTimer.Interval = TimeSpan.FromSeconds(3);
+            windowScanTimer = new DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(3)
+            };
             windowScanTimer.Tick += WindowScanTimer_Tick;
             windowScanTimer.Start();
 
@@ -68,12 +74,12 @@ namespace WindowGopher
             ScanWindows();
         }
 
-        private void WindowScanTimer_Tick(object sender, EventArgs e)
+        private void WindowScanTimer_Tick(object? sender, EventArgs e)
         {
             ScanWindows();
         }
 
-        private string GetWindowDisplayName(Process proc)
+        private static string GetWindowDisplayName(Process proc)
         {
             string title = proc.MainWindowTitle;
             string processName = proc.ProcessName;
@@ -85,7 +91,7 @@ namespace WindowGopher
             }
             else
             {
-                displayName = $"{title} - {processName}";
+                displayName = $"{processName} (PID: {proc.Id})";
             }
 
             return displayName;
@@ -93,7 +99,7 @@ namespace WindowGopher
 
         private void ScanWindows()
         {
-            var currentWindows = new Dictionary<string, IntPtr>();
+            var currentWindows = new Dictionary<string, (IntPtr Handle, int ProcessId)>();
             var selectedCurrentWindow = cmbCurrentWindow.SelectedItem?.ToString();
             var selectedTargetWindow = cmbTargetWindow.SelectedItem?.ToString();
 
@@ -102,7 +108,7 @@ namespace WindowGopher
                 if (proc.MainWindowHandle != IntPtr.Zero)  // Only include processes with a window
                 {
                     string displayName = GetWindowDisplayName(proc);
-                    currentWindows[displayName] = proc.MainWindowHandle;
+                    currentWindows[displayName] = (proc.MainWindowHandle, proc.Id);
                 }
             }
 
@@ -146,31 +152,35 @@ namespace WindowGopher
                 return;
             }
 
-            if (cmbCurrentWindow.SelectedItem.ToString() == cmbTargetWindow.SelectedItem.ToString())
+            string currentWindowName = cmbCurrentWindow.SelectedItem.ToString() ?? string.Empty;
+            string targetWindowName = cmbTargetWindow.SelectedItem.ToString() ?? string.Empty;
+
+            if (currentWindowName == targetWindowName)
             {
                 MessageBox.Show("Current and target windows must be different.");
                 return;
             }
 
             if (!int.TryParse(txtMainInterval.Text, out mainInterval))
-                mainInterval = 20;
+                mainInterval = 23;
             if (!int.TryParse(txtBackInterval.Text, out backInterval))
-                backInterval = 2;
+                backInterval = 3;
 
             // Get handles from our stored dictionary
-            string currentWindowName = cmbCurrentWindow.SelectedItem.ToString();
-            string targetWindowName = cmbTargetWindow.SelectedItem.ToString();
-
-            if (windowHandles.TryGetValue(currentWindowName, out currentWindowHandle) &&
-                windowHandles.TryGetValue(targetWindowName, out targetWindowHandle))
+            if (windowHandles.TryGetValue(currentWindowName, out var currentWindow) &&
+                windowHandles.TryGetValue(targetWindowName, out var targetWindow))
             {
-                switchTimer = new DispatcherTimer();
-                switchTimer.Interval = TimeSpan.FromSeconds(mainInterval);
+                currentWindowHandle = currentWindow.Handle;
+                targetWindowHandle = targetWindow.Handle;
+
+                switchTimer = new DispatcherTimer
+                {
+                    Interval = TimeSpan.FromSeconds(mainInterval)
+                };
                 switchTimer.Tick += SwitchTimer_Tick;
                 switchTimer.Start();
 
                 // Update UI to show running state
-                isRunning = true;
                 btnStart.Visibility = Visibility.Collapsed;
                 btnStop.Visibility = Visibility.Visible;
                 statusIndicator.Fill = new SolidColorBrush(Colors.Green);
@@ -190,13 +200,12 @@ namespace WindowGopher
             }
 
             // Update UI to show stopped state
-            isRunning = false;
             btnStart.Visibility = Visibility.Visible;
             btnStop.Visibility = Visibility.Collapsed;
             statusIndicator.Fill = new SolidColorBrush(Colors.Gray);
         }
 
-        private void ForceWindowToFront(IntPtr hWnd)
+        private static void ForceWindowToFront(IntPtr hWnd)
         {
             // Get the thread IDs
             uint currentThreadId = GetCurrentThreadId();
@@ -228,7 +237,7 @@ namespace WindowGopher
             }
         }
 
-        private async void SwitchTimer_Tick(object sender, EventArgs e)
+        private async void SwitchTimer_Tick(object? sender, EventArgs e)
         {
             if (currentWindowHandle != IntPtr.Zero && targetWindowHandle != IntPtr.Zero)
             {

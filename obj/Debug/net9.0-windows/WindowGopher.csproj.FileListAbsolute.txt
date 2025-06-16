@@ -18,3 +18,4 @@ c:\Users\bilal\WindowGopher\obj\Debug\net9.0-windows\refint\WindowGopher.dll
 c:\Users\bilal\WindowGopher\obj\Debug\net9.0-windows\WindowGopher.pdb
 C:\Users\bilal\WindowGopher\obj\Debug\net9.0-windows\WindowGopher.genruntimeconfig.cache
 C:\Users\bilal\WindowGopher\obj\Debug\net9.0-windows\ref\WindowGopher.dll
+C:\Users\bilal\WindowGopher\obj\Debug\net9.0-windows\WindowGopher.sourcelink.json
