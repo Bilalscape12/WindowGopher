@@ -4,7 +4,7 @@
 
 By default, it brings a selected window to the foreground every **23 seconds** and returns focus to another active window after **3 seconds**. These time intervals are fully customizable through the user interface.
 
-![User interface](interface.png)
+![User interface](interface.PNG)
 
 ## Use Case
 
